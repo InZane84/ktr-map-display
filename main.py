@@ -10,6 +10,11 @@ License: MIT
 Copyright (c) 2026 InZane84
 """
 
+# TODO: Don't allow ridiculous scale values, like 10.0+
+#       it crashes PIL (memory errors)
+#
+#       fix sprite scaling - looks like trash at low values (default-.2)
+
 import re, zipfile
 from pathlib import Path
 from io import BytesIO
@@ -18,6 +23,8 @@ import rich_click as click
 from omg.wad import WAD
 from omg.udmf import UMapEditor
 from PIL import Image, ImageDraw
+
+#Image.MAX_IMAGE_PIXELS = set me later
 
 KTR_EX_CFG = "KillingTimeEX_UDMF.cfg"
 
@@ -114,8 +121,8 @@ def get_map_bounds(udmf_map):
 )
 @click.argument('wadfile', type=click.Path(exists=True))
 @click.argument('pk3', type=click.Path(exists=True))
-@click.option('--output', '-o', default='MAP_preview.png', help='Output filename and path.', metavar='<PATH>')
-@click.option('--scale', '-s', type=float, default=0.1, help='Scale factor.')
+@click.option('--output', '-o', default='MAP_ktr.png', help='Output filename and path.', metavar='<PATH>')
+@click.option('--scale', '-s', type=click.FloatRange(min=0.2, max=1.0), default=0.25, help='Scale factor.')
 @click.option('--things/--no-things', '-t/-nt', default=False, help='Toggle drawing monsters.')
 def main(wadfile, pk3, output, scale, things):
     """
@@ -166,11 +173,17 @@ def main(wadfile, pk3, output, scale, things):
                         image_path = assets[base_sprite]
                         with archive.open(image_path) as f:
                             sprite_image = Image.open(BytesIO(f.read())).convert("RGBA")
-                        new_size = (int(sprite_image.width * SCALE), int(sprite_image.height * SCALE))
+                        #new_size = (int(sprite_image.width * SCALE), int(sprite_image.height * SCALE))
+                        sw = max(1, int(round(sprite_image.width * SCALE)))
+                        sh = max(1, int(round(sprite_image.height * SCALE)))
+                        new_size = (sw, sh)
+
                         sprite_image = sprite_image.resize(new_size, Image.Resampling.NEAREST)
                         cx, cy = to_pixels(thing.x, thing.y)
-                        overlay_pos = (cx - (sprite_image.width // 2),
-                                       cy - (sprite_image.height // 2))
+                        #overlay_pos = (cx - (sprite_image.width // 2),
+                        #               cy - (sprite_image.height // 2))
+                        overlay_pos = (cx - (sw // 2), cy - (sh // 2))
+
                         canvas.paste(sprite_image, overlay_pos, sprite_image)
         canvas.save(im_out)
         click.echo(f"wrote image to {im_out}")
