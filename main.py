@@ -10,11 +10,6 @@ License: MIT
 Copyright (c) 2026 InZane84
 """
 
-# TODO: Don't allow ridiculous scale values, like 10.0+
-#       it crashes PIL (memory errors)
-#
-#       fix sprite scaling - looks like trash at low values (default-.2)
-
 import re, zipfile
 from pathlib import Path
 from io import BytesIO
@@ -70,11 +65,12 @@ def load_pk3(pk3) -> dict: # type: ignore
     except Exception as e:
         print(f"load_pk3: error loading ktr assets @ {e}")
 
-def load_monsters(KTR_EX_CFG) -> dict: # type: ignore
-    """ load the monsters from the cfg file """
+def link_sprites(KTR_EX_CFG) -> dict: # type: ignore
+    """ link the sprites to the THINGS ids """
     
     try:
         content = Path(KTR_EX_CFG).read_text()
+        # TODO: why are we grabbing non-monsters
         monster_section_match = re.search(r'monsters\s*\{(.+)', content, re.DOTALL)
         if not monster_section_match:
             return "NO monsters detected!" # type: ignore
@@ -90,10 +86,10 @@ def load_monsters(KTR_EX_CFG) -> dict: # type: ignore
                 full_sprite = sprite_match.group(1).upper()
                 base_sprite = full_sprite[:4]
                 monster_map[thing_id] = base_sprite
-        print(f"load_monsters: ktr monsters loaded!")
+        print("link_sprites: sprites linked to IDs!")
         return monster_map
     except Exception as e:
-        print("error loading monsters")
+        print(f"link_sprites: error linking sprites to IDs - {e}")
 
 def get_map_bounds(udmf_map):
     v0 = udmf_map.vertexes[0]
@@ -131,13 +127,13 @@ def main(wadfile, pk3, output, scale, things):
 
     wad = load_wadfile(wadfile)
     assets = load_pk3(pk3)
-    monsters = load_monsters(KTR_EX_CFG)
+    sprites = link_sprites(KTR_EX_CFG)
     assets_path = pk3
     
     im_out = output
     SCALE = scale
 
-    if wad and assets and monsters:       
+    if wad and assets and sprites:       
         # 'map space(world)' uses a Cartesian plane (Y goes up), but
         # Pillow uses an image plane (Y goes down).
         # So we must offset by minimums and flip the Y-axis
@@ -164,12 +160,10 @@ def main(wadfile, pk3, output, scale, things):
                 line_color = (100, 100, 100)
             draw.line([start_pos, end_pos], fill=line_color, width=1)
         if things:
-            sprite_width = 150
-            sprite_heigth = 150
             with zipfile.ZipFile(pk3, 'r') as archive:
                 for thing in wad.things:
-                    if thing.type in monsters:
-                        base_sprite = monsters[thing.type]
+                    if thing.type in sprites:
+                        base_sprite = sprites[thing.type]
                         image_path = assets[base_sprite]
                         with archive.open(image_path) as f:
                             sprite_image = Image.open(BytesIO(f.read())).convert("RGBA")
